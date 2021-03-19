@@ -50,13 +50,14 @@ export default {
                 context.type = data.type
             })
     },
-    checkAuthentication() {
-        const token = document.cookie
+    checkAuthentication(context) {
+        const token = context.$cookies.get('token')
 
         if (token) this.user.authenticated = true
 
         else this.user.authenticated = false
-        Axios.post(`${WeightAPI}/api/get/user`, token).then(({ data }) => {
+
+        Axios.post(`${WeightAPI}/api/get/user`, { token: token }).then(({ data }) => {
 
             this.user.authenticated = true
             this.user.email = data.userData.email

@@ -5,10 +5,11 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 var cors = require('cors');
 const crypto = require('crypto');
+var cors = require('cors');
 
 // Database Setup
 const app = express();
-
+app.use(cors({ credentials: true, origin: 'http://localhost:8080' }));
 const uri = "mongodb://127.0.0.1:27017/WeightControl"
 
 mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
@@ -17,9 +18,14 @@ const userSchema = {
     'email': String,
     'password': String
 }
+const noteSchema = {
+    'userId': String,
+    'dateCreated': String,
+    'value': Number
+}
 const User = new mongoose.model('User', userSchema)
-
-// Crypto
+const Note = new mongoose.model('Note', noteSchema)
+    // Crypto
 const getHashedPassword = (password) => {
     const sha256 = crypto.createHash('sha256');
     const hash = sha256.update(password).digest('base64');
@@ -34,7 +40,7 @@ const authTokens = {};
 // Express App Setup
 app.use(cors());
 app.use(function(req, res, next) {
-    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Origin", "http://localhost:8080");
     next()
 })
 app.use(bodyParser.json())
@@ -71,7 +77,7 @@ app.post("/signup", async function(req, res) {
             }
         })
     } else {
-        res.status(400).send({ message: "User already exists!", type: "danger" })
+        res.status(400).send({ message: "Пользователь с такой почтой уже существует!", type: "danger" })
     }
 })
 
@@ -88,7 +94,7 @@ app.post("/login", async function(req, res) {
         res.status(200).send({ message: "Success", type: "success", token: authToken, userData: { email: authTokens[authToken].email, _id: authTokens[authToken].id } })
 
     } else {
-        res.status(401).send({ message: "Invalid login or password", type: "danger" })
+        res.status(401).send({ message: "Неправильный логин или пароль!", type: "danger" })
     }
 
 
@@ -104,10 +110,44 @@ app.post('/logout', async function(req, res) {
 app.post('/api/get/user', async function(req, res) {
     const token = req.body.token
     const currentUser = authTokens[token]
+
     if (!currentUser) {
         res.status(401).send({ message: "Unauthorized" })
     } else {
         res.status(200).send({ message: "Success", type: "success", token: token, userData: { email: authTokens[token].email, _id: authTokens[token].id } })
+    }
+
+})
+
+app.get('/api/get/notes', async function(req, res) {
+    // const cookies = parseCookie(req.body._xsrf)
+    const currentUser = authTokens[req.cookies.token]
+
+    if (!currentUser) {
+        res.header("Access-Control-Allow-Origin", "http://localhost:8080").status(401).send({ message: "Unauthorized" })
+    } else {
+        const userNotes = await Note.find({ "userId": currentUser._id }).sort({ datefield: -1 })
+
+        res.header("Access-Control-Allow-Origin", "http://localhost:8080").status(200).send({ message: "Success", notes: userNotes })
+    }
+})
+
+
+app.post('/api/post/notes', async function(req, res) {
+    // const cookies = parseCookie(req.body._xsrf)
+    let note = req.body.note
+    const currentUser = authTokens[req.cookies.token]
+    if (!currentUser) {
+        res.header("Access-Control-Allow-Origin", "http://localhost:8080").status(401).send({ message: "Unauthorized" })
+    } else {
+        if (note._id) {
+            await Note.updateOne({ _id: note._id }, note)
+
+        } else {
+            note.userId = currentUser._id
+            await Note.create(note)
+        }
+        res.header("Access-Control-Allow-Origin", "http://localhost:8080").status(200).send({ message: "Success" })
     }
 })
 
